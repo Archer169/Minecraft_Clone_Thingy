@@ -1,28 +1,33 @@
-import archer.model.Block;
+import archer.world.PerlinNoise;
+import archer.world.World;
+import archer.world.Camera;
+import archer.world.Chunk;
 import archer.shader.ShaderHelper;
-import archer.textures.Colour;
+import org.joml.Vector3f;
+import org.lwjgl.opengl.GL;
+import org.joml.Matrix4f;
+import org.lwjgl.system.MemoryUtil;
 
-import org.lwjgl.glfw.GLFWKeyCallback;
-import org.lwjgl.opengl.*;
-import org.lwjgl.system.*;
+import java.nio.FloatBuffer;
 
-import java.nio.*;
-
-import static org.lwjgl.glfw.Callbacks.*;
+import static org.lwjgl.glfw.Callbacks.glfwFreeCallbacks;
 import static org.lwjgl.glfw.GLFW.*;
-import static org.lwjgl.opengl.ARBVertexArrayObject.glBindVertexArray;
-import static org.lwjgl.opengl.ARBVertexArrayObject.glGenVertexArrays;
 import static org.lwjgl.opengl.GL11.*;
 import static org.lwjgl.opengl.GL20.*;
-import static org.lwjgl.system.MemoryUtil.*;
-
-import org.joml.Matrix4f;
 
 public class Main {
     private long window;
-    public int shaderProgram;
+    private int shaderProgram;
 
-    private Block Block = new Block();
+    private World world;
+    private Camera camera;
+    private Chunk chunk = new Chunk(new PerlinNoise(6752478));
+
+    private int width = 1600;
+    private int height = 1200;
+
+    private double lastMouseX, lastMouseY;
+    private boolean firstMouse = true;
 
     public void run() {
         init();
@@ -39,101 +44,125 @@ public class Main {
         glfwWindowHint(GLFW_VISIBLE, GLFW_FALSE);
         glfwWindowHint(GLFW_RESIZABLE, GLFW_TRUE);
 
-        window = glfwCreateWindow(1600, 1200, "Hello LWJGL", NULL, NULL);
-        if (window == NULL) {
+        window = glfwCreateWindow(width, height, "Hello LWJGL", MemoryUtil.NULL, MemoryUtil.NULL);
+        if (window == MemoryUtil.NULL) {
             throw new RuntimeException("Failed to create the GLFW window");
         }
 
         glfwMakeContextCurrent(window);
-        glfwSwapInterval(1); // vsync
+        glfwSwapInterval(1);
         glfwShowWindow(window);
 
-        GL.createCapabilities(); // Must be done before any OpenGL calls
+        GL.createCapabilities();
 
-        // Compile and link shaders here
-        ShaderHelper ShaderHelper = new ShaderHelper();
+        // Capture and hide the cursor for mouse look
+        glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
 
-        shaderProgram = ShaderHelper.createShaderProgram("Vertex.glsl", "Fragment.glsl");
+        ShaderHelper shaderHelper = new ShaderHelper();
+        shaderProgram = shaderHelper.createShaderProgram("Vertex.glsl", "Fragment.glsl");
+
         glUseProgram(shaderProgram);
 
-        Block.VAOID = glGenVertexArrays();
-        Block.VBOID = glGenBuffers();
-        Block.EBOID = glGenBuffers();
+        world = new World();
 
-        glBindVertexArray(Block.VAOID);
+        camera = new Camera(new Vector3f(0, chunk.getHeight(0, 0) + 2, 0)); // Default constructor - position set inside Camera
 
-        // Vertex Buffer
-        glBindBuffer(GL_ARRAY_BUFFER, Block.VBOID);
-        glBufferData(GL_ARRAY_BUFFER, Block.blockAll(0, 0, 0, Colour.BLUE), GL_STATIC_DRAW);
-
-        // Element Buffer
-        glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, Block.EBOID);
-        glBufferData(GL_ELEMENT_ARRAY_BUFFER, Block.INDICES, GL_STATIC_DRAW);
-
-        // Position attribute
-        glVertexAttribPointer(0, 3, GL_FLOAT, false, 6 * Float.BYTES, 0);
-        glEnableVertexAttribArray(0);
-
-        // Color attribute
-        glVertexAttribPointer(1, 3, GL_FLOAT, false, 6 * Float.BYTES, 3 * Float.BYTES);
-        glEnableVertexAttribArray(1);
-
-        glBindBuffer(GL_ARRAY_BUFFER, 0);
-        glBindVertexArray(0);
+        world.generateChunks(128, 128);
 
         glEnable(GL_DEPTH_TEST);
     }
 
     private void loop() {
-        GL.createCapabilities();
-        double angle = -1;
-
-        Matrix4f view = new Matrix4f().translate(0f, 0f, -3f);
+        double lastTime = glfwGetTime();
 
         while (!glfwWindowShouldClose(window)) {
-            angle += 1;
+            double currentTime = glfwGetTime();
+            float deltaTime = (float) (currentTime - lastTime);
+            lastTime = currentTime;
 
-            if (glfwGetKey(window, GLFW_KEY_W) == GLFW_PRESS) view.translate( 0, 0, 0.1f);
-            if (glfwGetKey(window, GLFW_KEY_S) == GLFW_PRESS) view.translate( 0, 0, -0.1f);
-
-            if (glfwGetKey(window, GLFW_KEY_A) == GLFW_PRESS) view.translate( 0.1f, 0, 0f);
-            if (glfwGetKey(window, GLFW_KEY_D) == GLFW_PRESS) view.translate( -0.1f, 0, 0f);
-
-            if (glfwGetKey(window, GLFW_KEY_SPACE) == GLFW_PRESS) view.translate( 0, -0.1f, 0f);
-            if (glfwGetKey(window, GLFW_KEY_LEFT_SHIFT) == GLFW_PRESS) view.translate( 0, 0.1f, 0f);
-
-            if (glfwGetKey(window, GLFW_KEY_UP) == GLFW_PRESS) view.rotate( 0.1f, 1, 0, 0);
-            if (glfwGetKey(window, GLFW_KEY_DOWN) == GLFW_PRESS) view.rotate( -0.1f, 1, 0, 0);
-
-            if (glfwGetKey(window, GLFW_KEY_LEFT) == GLFW_PRESS) view.rotate( 0.1f, 0, 1, 0);
-            if (glfwGetKey(window, GLFW_KEY_RIGHT) == GLFW_PRESS) view.rotate( -0.1f, 0, 1, 0);
-
-            Matrix4f projection = new Matrix4f().perspective((float) Math.toRadians(45f), 800f/600f, 0.1f, 100f);
-
+            glClearColor(0.5f, 0.7f, 1.0f, 1.0f);
             glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
+            processInput(deltaTime);
+
+            Matrix4f view = camera.getViewMatrix();
+            Matrix4f projection = new Matrix4f().perspective(
+                    (float) Math.toRadians(70),
+                    width / (float) height,
+                    0.1f,
+                    1000f
+            );
+
             glUseProgram(shaderProgram);
-            glBindVertexArray(Block.VAOID);
 
-            // Send matrices to shaders
-            try (MemoryStack stack = MemoryStack.stackPush()) {
-                FloatBuffer fb = stack.mallocFloat(16);
+// Get uniform locations once (you can optimize this by caching outside loop if you want)
+            int lightDirLoc = glGetUniformLocation(shaderProgram, "lightDir");
+            int lightColorLoc = glGetUniformLocation(shaderProgram, "lightColor");
+            int viewPosLoc = glGetUniformLocation(shaderProgram, "viewPos");
+            int modelLoc = glGetUniformLocation(shaderProgram, "u_Model");
+            int normalMatrixLoc = glGetUniformLocation(shaderProgram, "u_NormalMatrix");
 
-                glUniformMatrix4fv(glGetUniformLocation(shaderProgram, "view"), false, view.get(fb));
-                glUniformMatrix4fv(glGetUniformLocation(shaderProgram, "projection"), false, projection.get(fb));
+// Set lighting uniforms
+            glUniform3f(lightDirLoc, 0.5f, -1.0f, 0.3f);     // light direction
+            glUniform3f(lightColorLoc, 1.0f, 1.0f, 1.0f);    // white light
+            Vector3f camPos = camera.position;
+            glUniform3f(viewPosLoc, camPos.x, camPos.y, camPos.z);  // camera position
 
-                Matrix4f model1 = new Matrix4f().translate(0f, -1f, 0f);
-                glUniformMatrix4fv(glGetUniformLocation(shaderProgram, "model"), false, model1.get(fb));
-                glDrawElements(GL_TRIANGLES, Block.INDICES.length, GL_UNSIGNED_INT, 0);
+// Set model matrix (identity if no per-block transform)
+            Matrix4f model = new Matrix4f().identity();
+            FloatBuffer fb = MemoryUtil.memAllocFloat(16);
+            model.get(fb);
+            glUniformMatrix4fv(modelLoc, false, fb);
 
-                Matrix4f model2 = new Matrix4f().translate(0f, 1f, 0f);
-                glUniformMatrix4fv(glGetUniformLocation(shaderProgram, "model"), false, model2.get(fb));
-                glDrawElements(GL_TRIANGLES, Block.INDICES.length, GL_UNSIGNED_INT, 0);
-            }
+// Set normal matrix (inverse transpose of model)
+            Matrix4f normalMatrix = new Matrix4f(model).invert().transpose();
+            normalMatrix.get(fb);
+            glUniformMatrix4fv(normalMatrixLoc, false, fb);
+
+            MemoryUtil.memFree(fb);
+
+// Then render your world with the MVP uniform
+            int mvpLoc = glGetUniformLocation(shaderProgram, "u_MVP");
+            Matrix4f mvp = new Matrix4f(projection).mul(view).mul(model);
+            FloatBuffer mvpBuffer = MemoryUtil.memAllocFloat(16);
+            mvp.get(mvpBuffer);
+            glUniformMatrix4fv(mvpLoc, false, mvpBuffer);
+            MemoryUtil.memFree(mvpBuffer);
+
+            world.render(modelLoc, view, projection, camera.position, 4);
 
             glfwSwapBuffers(window);
             glfwPollEvents();
         }
+    }
+
+    private void processInput(float deltaTime) {
+        // Keyboard
+        if (glfwGetKey(window, GLFW_KEY_W) == GLFW_PRESS) camera.processKeyboard(GLFW_KEY_W, deltaTime);
+        if (glfwGetKey(window, GLFW_KEY_S) == GLFW_PRESS) camera.processKeyboard(GLFW_KEY_S, deltaTime);
+        if (glfwGetKey(window, GLFW_KEY_A) == GLFW_PRESS) camera.processKeyboard(GLFW_KEY_A, deltaTime);
+        if (glfwGetKey(window, GLFW_KEY_D) == GLFW_PRESS) camera.processKeyboard(GLFW_KEY_D, deltaTime);
+        if (glfwGetKey(window, GLFW_KEY_SPACE) == GLFW_PRESS) camera.processKeyboard(GLFW_KEY_SPACE, deltaTime);
+        if (glfwGetKey(window, GLFW_KEY_LEFT_SHIFT) == GLFW_PRESS) camera.processKeyboard(GLFW_KEY_LEFT_SHIFT, deltaTime);
+
+        // Mouse
+        double[] mouseX = new double[1];
+        double[] mouseY = new double[1];
+        glfwGetCursorPos(window, mouseX, mouseY);
+
+        if (firstMouse) {
+            lastMouseX = mouseX[0];
+            lastMouseY = mouseY[0];
+            firstMouse = false;
+        }
+
+        float xoffset = (float) (mouseX[0] - lastMouseX);
+        float yoffset = (float) (lastMouseY - mouseY[0]); // reversed: y-coords go from bottom to top
+
+        lastMouseX = mouseX[0];
+        lastMouseY = mouseY[0];
+
+        camera.processMouseMovement(xoffset, yoffset);
     }
 
     private void cleanup() {

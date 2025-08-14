@@ -1,14 +1,22 @@
 #version 330 core
-layout (location = 0) in vec3 aPos;
-layout (location = 1) in vec3 aColor;
 
-out vec3 ourColor;
+layout(location = 0) in vec3 aPos;
+layout(location = 1) in vec3 aColor;
+layout(location = 2) in vec3 aNormal;  // NEW: normal attribute
 
-uniform mat4 model;
-uniform mat4 view;
-uniform mat4 projection;
+uniform mat4 u_MVP;
+uniform mat4 u_Model;       // model matrix for transforming normals
+uniform mat4 u_NormalMatrix; // inverse transpose of model matrix for normals
+
+out vec3 vertexColor;
+out vec3 Normal;
+out vec3 FragPos;
 
 void main() {
-    gl_Position = projection * view * model * vec4(aPos, 1.0);
-    ourColor = aColor;
+    gl_Position = u_MVP * vec4(aPos, 1.0);
+
+    FragPos = vec3(u_Model * vec4(aPos, 1.0));
+    Normal = mat3(u_NormalMatrix) * aNormal;
+
+    vertexColor = aColor;
 }
