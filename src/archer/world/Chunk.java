@@ -20,22 +20,14 @@ public class Chunk {
     private Block block = new Block();
     private PerlinNoise perlin;
 
-    private BlockData[][][] blocks = new BlockData[CHUNK_SIZE][MAX_HEIGHT][CHUNK_SIZE];
+    public BlockData[][][] blocks = new BlockData[CHUNK_SIZE][MAX_HEIGHT][CHUNK_SIZE];
 
     // OpenGL buffers
     private int vaoId, vboId, eboId;
     private int indexCount;
 
     // Simple container for block info
-    private static class BlockData {
-        public boolean solid;
-        public Colour colour;
 
-        public BlockData(boolean solid, Colour colour) {
-            this.solid = solid;
-            this.colour = colour;
-        }
-    }
 
     // Constructor needs a PerlinNoise instance (shared or new)
     public Chunk(PerlinNoise perlin) {
@@ -53,7 +45,6 @@ public class Chunk {
 
                 for (int y = 0; y < MAX_HEIGHT; y++) {
                     if (y > SURFACEY) {
-                        // Air
                         blocks[x][y][z] = null;
                     } else if (isCave(worldX, y, worldZ) && y < (SURFACEY + 1)) {
                         // Cave (air)
@@ -190,6 +181,17 @@ public class Chunk {
         glBindVertexArray(0);
     }
 
+    public boolean isBlockSolidAtWorld(int worldX, int worldY, int worldZ) {
+        int localX = worldX - (chunkX * CHUNK_SIZE);
+        int localZ = worldZ - (chunkZ * CHUNK_SIZE);
+
+        if (worldY < 0 || worldY >= MAX_HEIGHT) return false; // outside world vertically
+        if (localX < 0 || localX >= CHUNK_SIZE || localZ < 0 || localZ >= CHUNK_SIZE) return false;
+
+        BlockData b = blocks[localX][worldY][localZ];
+        return b != null && b.solid;
+    }
+
     // Render this chunk (call from world render loop)
     public void render(int modelLoc, Matrix4f view, Matrix4f projection) {
         Matrix4f model = new Matrix4f().identity();
@@ -210,7 +212,7 @@ public class Chunk {
 
     // Helpers:
 
-    private int chunkX, chunkZ;
+    public int chunkX, chunkZ;
 
     // Call before generate/buildMesh to set chunk position in world coords
     public void setChunkCoords(int chunkX, int chunkZ) {
@@ -265,5 +267,17 @@ public class Chunk {
             double threshold = 0.75;
             return noiseValue > threshold;
         }
+    }
+
+    public static boolean isTree(int x, int z, PerlinNoise perlin) {
+        double scale = 0.99;
+
+        double noiseValue = perlin.noise(x * scale, z * scale);
+
+        noiseValue = (noiseValue + 1) / 2.0;
+
+        double threshold = 0.8;
+
+        return noiseValue > threshold;
     }
 }

@@ -1,5 +1,6 @@
 package archer.world;
 
+import archer.world.player.Player;
 import org.joml.Matrix4f;
 import org.joml.Vector3f;
 
@@ -12,7 +13,7 @@ public class Camera {
     private Vector3f right;
     private Vector3f worldUp;
 
-    private float yaw = -90f;   // facing -Z initially
+    public static float yaw = -90f;   // facing -Z initially
     private float pitch = 0f;
 
     private float movementSpeed = 10f;  // units per second
@@ -20,7 +21,7 @@ public class Camera {
 
     public Camera(Vector3f startPos) {
 
-        position = startPos;
+        position = new Vector3f(startPos.x, startPos.y + 1, startPos.z);
         worldUp = new Vector3f(0, 1, 0);
         front = new Vector3f(0, 0, -1);
         updateCameraVectors();
@@ -29,6 +30,10 @@ public class Camera {
     public Matrix4f getViewMatrix() {
         Vector3f center = new Vector3f(position).add(front);
         return new Matrix4f().lookAt(position, center, up);
+    }
+
+    public void updateFromPlayer(Player player) {
+        this.position.set(player.position.x, player.position.y + player.height * 0.9f, player.position.z);
     }
 
     public void processKeyboard(int key, float deltaTime) {

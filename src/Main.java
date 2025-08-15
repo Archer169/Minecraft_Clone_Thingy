@@ -3,6 +3,7 @@ import archer.world.World;
 import archer.world.Camera;
 import archer.world.Chunk;
 import archer.shader.ShaderHelper;
+import archer.world.player.Player;
 import org.joml.Vector3f;
 import org.lwjgl.opengl.GL;
 import org.joml.Matrix4f;
@@ -28,6 +29,7 @@ public class Main {
 
     private double lastMouseX, lastMouseY;
     private boolean firstMouse = true;
+    private Player player;
 
     public void run() {
         init();
@@ -65,7 +67,10 @@ public class Main {
 
         world = new World();
 
-        camera = new Camera(new Vector3f(0, chunk.getHeight(0, 0) + 2, 0)); // Default constructor - position set inside Camera
+        player = new Player(new Vector3f(0, 256, 0));
+        player.position.set(0, chunk.getHeight(0, 0) + 5, 0); // start above terrain
+        camera = new Camera(player.position);
+        // Default constructor - position set inside Camera
 
         world.generateChunks(128, 128);
 
@@ -136,14 +141,23 @@ public class Main {
         }
     }
 
+    private void cleanup() {
+        glfwFreeCallbacks(window);
+        glfwDestroyWindow(window);
+        glfwTerminate();
+    }
+
     private void processInput(float deltaTime) {
-        // Keyboard
-        if (glfwGetKey(window, GLFW_KEY_W) == GLFW_PRESS) camera.processKeyboard(GLFW_KEY_W, deltaTime);
-        if (glfwGetKey(window, GLFW_KEY_S) == GLFW_PRESS) camera.processKeyboard(GLFW_KEY_S, deltaTime);
-        if (glfwGetKey(window, GLFW_KEY_A) == GLFW_PRESS) camera.processKeyboard(GLFW_KEY_A, deltaTime);
-        if (glfwGetKey(window, GLFW_KEY_D) == GLFW_PRESS) camera.processKeyboard(GLFW_KEY_D, deltaTime);
-        if (glfwGetKey(window, GLFW_KEY_SPACE) == GLFW_PRESS) camera.processKeyboard(GLFW_KEY_SPACE, deltaTime);
-        if (glfwGetKey(window, GLFW_KEY_LEFT_SHIFT) == GLFW_PRESS) camera.processKeyboard(GLFW_KEY_LEFT_SHIFT, deltaTime);
+        boolean forward = glfwGetKey(window, GLFW_KEY_W) == GLFW_PRESS;
+        boolean back    = glfwGetKey(window, GLFW_KEY_S) == GLFW_PRESS;
+        boolean left    = glfwGetKey(window, GLFW_KEY_A) == GLFW_PRESS;
+        boolean right   = glfwGetKey(window, GLFW_KEY_D) == GLFW_PRESS;
+        boolean sprint  = glfwGetKey(window, GLFW_KEY_LEFT_SHIFT) == GLFW_PRESS;
+        boolean jump    = glfwGetKey(window, GLFW_KEY_SPACE) == GLFW_PRESS;
+
+        player.update(deltaTime, world, forward, back, left, right, jump, sprint);
+
+        camera.updateFromPlayer(player);
 
         // Mouse
         double[] mouseX = new double[1];
@@ -157,18 +171,12 @@ public class Main {
         }
 
         float xoffset = (float) (mouseX[0] - lastMouseX);
-        float yoffset = (float) (lastMouseY - mouseY[0]); // reversed: y-coords go from bottom to top
+        float yoffset = (float) (lastMouseY - mouseY[0]);
 
         lastMouseX = mouseX[0];
         lastMouseY = mouseY[0];
 
         camera.processMouseMovement(xoffset, yoffset);
-    }
-
-    private void cleanup() {
-        glfwFreeCallbacks(window);
-        glfwDestroyWindow(window);
-        glfwTerminate();
     }
 
     public static void main(String[] args) {

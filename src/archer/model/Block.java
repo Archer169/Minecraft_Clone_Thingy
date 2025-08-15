@@ -145,4 +145,8 @@ public class Block {
             0, 1, 2, 2, 3, 0
     };
 
+    public boolean isSolid() {
+        // You could make some block types non-solid later
+        return true;
+    }
 }
